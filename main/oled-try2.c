@@ -37,6 +37,12 @@ typedef enum{
 SystemState app_state = STATE_PAGE1;
 
 
+
+
+const char* stateToString(int state);
+
+
+
 const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 const int NUM_COLS = 3;
 void init_Cols(){
@@ -100,12 +106,14 @@ void task_keypad(void *pvParameters){
         uint8_t dummy_key;
         for(int i = 0; i < 6; i++){
             dummy_key = i;
-        }
+        
         if(xQueueSend(keypad_queue,&dummy_key,pdMS_TO_TICKS(100)) != pdPASS){
             ESP_LOGW(KYEPAD_TAG, "queue is full");
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
+    vTaskDelay(pdMS_TO_TICKS(100));
+}
 }
 void task_oled(void *pvParameters){
     while(1){
@@ -127,21 +135,37 @@ void task_main(void *pvParameters){
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE2;
-                    ESP_LOGI(MAIN_TAG,)
-
-
+                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE1 to %s", stateToString(app_state));
+                    break;
+                    
                     default:
 
                     break;
                 
                 }
             break;
-
+            
+            case STATE_PAGE2:
+                switch (received_key) {
+                    case 1:
+                    app_state = STATE_PAGE1;
+                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE2 to %s", stateToString(app_state));
+                    break;
+                
+                }
             default:
 
             break;
         
         }
+    }
+}
+
+const char* stateToString(int state){
+    switch (state) {
+        case 0: return "STATE_PAGE1";
+        case 1: return "STATE_PAGE2";
+        default: return "UNKNOWN";
     }
 }
 
