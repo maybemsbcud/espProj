@@ -1,0 +1,31 @@
+# ===== ESP-IDF build output =====
+build/
+build-*/
+
+# ===== ESP-IDF config backups =====
+# sdkconfig is kept in the repo (project configuration); only the backup is ignored
+sdkconfig.old
+
+# ===== Component Manager =====
+# downloaded automatically from idf_component.yml
+managed_components/
+
+# ===== clangd / editor =====
+.cache/
+.clangd
+compile_commands.json
+
+# VS Code settings contain local absolute paths and serial port
+.vscode/
+
+# ===== Python =====
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# ===== OS / misc =====
+.DS_Store
+Thumbs.db
+*.swp
+*~
