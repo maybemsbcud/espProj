@@ -27,6 +27,16 @@ QueueHandle_t keypad_queue;
 QueueHandle_t oled_queue;
 QueueHandle_t main_queue;
 
+
+typedef enum{
+    STATE_PAGE1,
+    STATE_PAGE2,
+
+}SystemState;
+
+SystemState app_state = STATE_PAGE1;
+
+
 const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 const int NUM_COLS = 3;
 void init_Cols(){
@@ -87,7 +97,10 @@ void keybordScan(){
 void task_keypad(void *pvParameters){
     while(1){
         //ESP_LOGI(KYEPAD_TAG, "its working");
-        uint8_t dummy_key = 5;
+        uint8_t dummy_key;
+        for(int i = 0; i < 6; i++){
+            dummy_key = i;
+        }
         if(xQueueSend(keypad_queue,&dummy_key,pdMS_TO_TICKS(100)) != pdPASS){
             ESP_LOGW(KYEPAD_TAG, "queue is full");
         }
@@ -109,6 +122,26 @@ void task_main(void *pvParameters){
             ESP_LOGI(MAIN_TAG, "received key %d", received_key);
         }
         
+        switch (app_state) {
+            case STATE_PAGE1:
+                switch (received_key) {
+                    case 1:
+                    app_state = STATE_PAGE2;
+                    ESP_LOGI(MAIN_TAG,)
+
+
+                    default:
+
+                    break;
+                
+                }
+            break;
+
+            default:
+
+            break;
+        
+        }
     }
 }
 
