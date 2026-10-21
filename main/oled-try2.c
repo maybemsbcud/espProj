@@ -40,9 +40,13 @@ SystemState app_state = STATE_PAGE1;
 const gpio_num_t ROW_PINS[] = {GPIO_NUM_9, GPIO_NUM_10};
 const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 
+i2c_master_dev_handle_t oled_dev_handle;
+i2c_master_bus_handle_t bus_handle;
 
 
 const char* stateToString(int state);
+uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr);
+uint8_t u8g2_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr);
 
 
 
@@ -137,18 +141,48 @@ void task_keypad(void *pvParameters){
     void task_oled(void *pvParameters){
         while(1){
             //ESP_LOGI(OLED_TAG, "its working");
+            u8g2_t u8g2; // Головна структура стану екрана
+            u8g2_InitDisplay(&u8g2);     // Відправляє команди ввімкнення екрана
+            u8g2_SetPowerSave(&u8g2, 0); // Виводить з режиму сну
+            u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8g2_i2c_byte_cb, u8g2_gpio_and_delay_cb);
+            u8g2_SetFont(&u8g2, u8g2_font_10x20_t_cyrillic); 
             vTaskDelay(pdMS_TO_TICKS(1000));
-            int received_status;
+            buttons received_status;
             if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
                 ESP_LOGI(OLED_TAG,"received state %d", received_status);
                 
-                switch (received_status) {
+                switch (received_status.id_button) {
                     case STATE_PAGE1:
-                    ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
-                    break;
+                        if(received_status.buttom_state){
+
+                        
+                        u8g2_ClearBuffer(&u8g2);
+                        
+                        u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
+                        u8g2_SendBuffer(&u8g2);
+
+                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
+                        }
+                        else{
+                            u8g2_ClearBuffer(&u8g2);
+                            u8g2_SendBuffer(&u8g2);
+                        }
+                        break;
                     
                     case STATE_PAGE2:
-                    ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                        if(received_status.buttom_state){
+
+                        
+                        u8g2_ClearBuffer(&u8g2);
+                        
+                        u8g2_DrawUTF8(&u8g2, 0, 35, "шлюха");
+                        u8g2_SendBuffer(&u8g2);
+                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
+                        }
+                        else{
+                            u8g2_ClearBuffer(&u8g2);
+                            u8g2_SendBuffer(&u8g2);
+                        }
                     break;
                     
                 }
@@ -159,18 +193,18 @@ void task_keypad(void *pvParameters){
         while(1){
             //ESP_LOGI(MAIN_TAG, "it work");
             //vTaskDelay(pdMS_TO_TICKS(500));
-            uint8_t received_key;
-            if((xQueueReceive(keypad_queue, &received_key, portMAX_DELAY)) == pdTRUE){
-                ESP_LOGI(MAIN_TAG, "received key %d", received_key);
+            buttons received_button;
+            if((xQueueReceive(keypad_queue, &received_button, portMAX_DELAY)) == pdTRUE){
+                ESP_LOGI(MAIN_TAG, "received key %d", received_button.id_button);
             }
             
             switch (app_state) {
                 case STATE_PAGE1:
-                switch (received_key) {
+                switch (received_button.id_button) {
                     case 1:
                     app_state = STATE_PAGE2;
                     ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE1 to %s", stateToString(app_state));
-                    if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
                         ESP_LOGW(MAIN_TAG, "queue is full");
                     }
                     break;
@@ -182,11 +216,11 @@ void task_keypad(void *pvParameters){
                 break;
                 
                 case STATE_PAGE2:
-                switch (received_key) {
+                switch (received_button.id_button) {
                     case 1:
                     app_state = STATE_PAGE1;
                     ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
-                    if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
                         ESP_LOGW(MAIN_TAG, "queue is full");
                     }
                     break;
@@ -206,8 +240,27 @@ void task_keypad(void *pvParameters){
         }
     }
     
+    void init_i2c(){
+        // === ТВОЯ ІНІЦІАЛІЗАЦІЯ I2C ===
+        i2c_master_bus_config_t bus_config = {
+            .i2c_port = -1,
+            .sda_io_num = 16,
+            .scl_io_num = 15,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+            .glitch_ignore_cnt = 7,
+            .flags.enable_internal_pullup = true,
+        };
+        
+        i2c_device_config_t dev_conf = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = 0x3C,
+            .scl_speed_hz = 400000,
+        };
+        i2c_new_master_bus(&bus_config, &bus_handle);
+        i2c_master_bus_add_device(bus_handle, &dev_conf, &oled_dev_handle);
+    }
+    
     // 1. Глобальний хендл для екрана, щоб callback міг його бачити
-    i2c_master_dev_handle_t oled_dev_handle;
     
     // 2. Callback для роботи з часом та затримками
     uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
@@ -255,47 +308,28 @@ void task_keypad(void *pvParameters){
     }
     void app_main(void) {
         keybord_init();
+        init_i2c();
+        
+        
         /*
-        // === ТВОЯ ІНІЦІАЛІЗАЦІЯ I2C ===
-        i2c_master_bus_config_t bus_config = {
-            .i2c_port = -1,
-            .sda_io_num = 16,
-            .scl_io_num = 15,
-            .clk_source = I2C_CLK_SRC_DEFAULT,
-            .glitch_ignore_cnt = 7,
-            .flags.enable_internal_pullup = true,
-            };
-            i2c_master_bus_handle_t bus_handle;
-            i2c_new_master_bus(&bus_config, &bus_handle);
-            
-            i2c_device_config_t dev_conf = {
-                .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = 0x3C,
-        .scl_speed_hz = 400000,
-    };
-    // Записуємо хендл у глобальну змінну, яку бачить HAL
-    i2c_master_bus_add_device(bus_handle, &dev_conf, &oled_dev_handle);
-
-    // === ІНІЦІАЛІЗАЦІЯ U8G2 ===
-    u8g2_t u8g2; // Головна структура стану екрана
-
-    // Кажемо u8g2: "У тебе екран SSD1306 по I2C, і ось функції, якими ти маєш користуватися"
-    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8g2_i2c_byte_cb, u8g2_gpio_and_delay_cb);
+        // Записуємо хендл у глобальну змінну, яку бачить HAL
+        
+        // === ІНІЦІАЛІЗАЦІЯ U8G2 ===
+        
+        // Кажемо u8g2: "У тебе екран SSD1306 по I2C, і ось функції, якими ти маєш користуватися"
     
-    u8g2_InitDisplay(&u8g2);     // Відправляє команди ввімкнення екрана
-    u8g2_SetPowerSave(&u8g2, 0); // Виводить з режиму сну
 
     // === МАЛЮВАННЯ ===
     //u8g2_ClearBuffer(&u8g2); // Очищаємо відеобуфер у пам'яті ESP32
     
     // Вибираємо шрифт (їх там тисячі, це стандартний середній)
-    u8g2_SetFont(&u8g2, u8g2_font_10x20_t_cyrillic); 
     
     // Пишемо текст. (Координати: X=15 від лівого краю, Y=35 від верху до базової лінії тексту)
     //u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
     //u8g2_DrawUTF8(&u8g2,20,45, "шлюха");
 
     // Виштовхуємо намальований кадр на фізичний екран
+u8g2_ClearBuffer(&u8g2);
     //u8g2_SendBuffer(&u8g2);
     bool screen = false;
     keybordScan();
