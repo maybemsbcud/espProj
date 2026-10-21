@@ -1,3 +1,4 @@
+
 #include <stdint.h>
 #include <stdio.h>
 #include "driver/i2c_master.h"
@@ -119,6 +120,20 @@ void task_oled(void *pvParameters){
     while(1){
         //ESP_LOGI(OLED_TAG, "its working");
         vTaskDelay(pdMS_TO_TICKS(1000));
+        int received_status;
+        if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
+            ESP_LOGI(OLED_TAG,"received state %d", received_status);
+        }
+        switch (received_status) {
+            case 1:
+            ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+            break;
+
+            case 2:
+            ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+            break;
+        
+        }
     }
 }
 void task_main(void *pvParameters){
@@ -135,11 +150,13 @@ void task_main(void *pvParameters){
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE2;
-                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE1 to %s", stateToString(app_state));
+                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE1 to %s", stateToString(received_key));
+                    if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                        ESP_LOGW(MAIN_TAG, "qeue if full");
+                    }
                     break;
                     
                     default:
-
                     break;
                 
                 }
@@ -149,14 +166,15 @@ void task_main(void *pvParameters){
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE1;
-                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE2 to %s", stateToString(app_state));
+                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE2 to %s", stateToString(received_key));
+                    if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                        ESP_LOGW(MAIN_TAG, "qeue if full");
+                    }
                     break;
                 
                 }
             default:
-
             break;
-        
         }
     }
 }
@@ -285,11 +303,12 @@ void app_main(void) {
         ESP_LOGE(KYEPAD_TAG,"failed to create queue, out of cheap memory");
         return;
     }
-     /*oled_queue = xQueueCreate(10, sizeof(uint8_t));
+    oled_queue = xQueueCreate(5, sizeof(int));
     if(oled_queue == NULL){
         ESP_LOGE(KYEPAD_TAG,"failed to create queue, out of cheap memory");
         return;
     }
+    /*
      main_queue = xQueueCreate(10, sizeof(uint8_t));
     if(main_queue == NULL){
         ESP_LOGE(KYEPAD_TAG,"failed to create queue, out of cheap memory");
