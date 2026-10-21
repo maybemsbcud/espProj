@@ -33,6 +33,7 @@ QueueHandle_t main_queue;
 typedef enum{
     STATE_PAGE1,
     STATE_PAGE2,
+    STATE_PAGE3,
     
 }SystemState;
 
@@ -139,26 +140,28 @@ void task_keypad(void *pvParameters){
     }
     
     void task_oled(void *pvParameters){
+        u8g2_t u8g2; // Головна структура стану екрана
+        u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8g2_i2c_byte_cb, u8g2_gpio_and_delay_cb);
+        u8g2_InitDisplay(&u8g2);     // Відправляє команди ввімкнення екрана
+        u8g2_SetPowerSave(&u8g2, 0); // Виводить з режиму сну
+        u8g2_SetFont(&u8g2, u8g2_font_10x20_t_cyrillic); 
+        u8g2_ClearBuffer(&u8g2);
+        u8g2_SendBuffer(&u8g2);
         while(1){
             //ESP_LOGI(OLED_TAG, "its working");
-            u8g2_t u8g2; // Головна структура стану екрана
-            u8g2_InitDisplay(&u8g2);     // Відправляє команди ввімкнення екрана
-            u8g2_SetPowerSave(&u8g2, 0); // Виводить з режиму сну
-            u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8g2_i2c_byte_cb, u8g2_gpio_and_delay_cb);
-            u8g2_SetFont(&u8g2, u8g2_font_10x20_t_cyrillic); 
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            //vTaskDelay(pdMS_TO_TICKS(1000));
             buttons received_status;
             if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
-                ESP_LOGI(OLED_TAG,"received state %d", received_status);
+                ESP_LOGI(OLED_TAG,"received state %d", received_status.id_button);
                 
                 switch (received_status.id_button) {
-                    case STATE_PAGE1:
+                    case 1:
                         if(received_status.buttom_state){
 
                         
                         u8g2_ClearBuffer(&u8g2);
                         
-                        u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
+                        u8g2_DrawUTF8(&u8g2, 0, 35, "шлюха");
                         u8g2_SendBuffer(&u8g2);
 
                         ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
@@ -169,13 +172,13 @@ void task_keypad(void *pvParameters){
                         }
                         break;
                     
-                    case STATE_PAGE2:
+                    case 2:
                         if(received_status.buttom_state){
 
                         
                         u8g2_ClearBuffer(&u8g2);
                         
-                        u8g2_DrawUTF8(&u8g2, 0, 35, "шлюха");
+                        u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
                         u8g2_SendBuffer(&u8g2);
                         ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
                         }
@@ -196,7 +199,6 @@ void task_keypad(void *pvParameters){
             buttons received_button;
             if((xQueueReceive(keypad_queue, &received_button, portMAX_DELAY)) == pdTRUE){
                 ESP_LOGI(MAIN_TAG, "received key %d", received_button.id_button);
-            }
             
             switch (app_state) {
                 case STATE_PAGE1:
@@ -217,7 +219,7 @@ void task_keypad(void *pvParameters){
                 
                 case STATE_PAGE2:
                 switch (received_button.id_button) {
-                    case 1:
+                    case 2:
                     app_state = STATE_PAGE1;
                     ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
                     if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
@@ -229,6 +231,7 @@ void task_keypad(void *pvParameters){
                 default:
                 break;
             }
+        }
         }
     }
     
@@ -352,12 +355,12 @@ u8g2_ClearBuffer(&u8g2);
              
         vTaskDelay(pdMS_TO_TICKS(20));
     }*/
-    keypad_queue = xQueueCreate(10, sizeof(uint8_t));
+    keypad_queue = xQueueCreate(10, sizeof(buttons));
     if(keypad_queue == NULL){
         ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
         return;
     }
-    oled_queue = xQueueCreate(5, sizeof(int));
+    oled_queue = xQueueCreate(5, sizeof(buttons));
     if(oled_queue == NULL){
         ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
         return;
