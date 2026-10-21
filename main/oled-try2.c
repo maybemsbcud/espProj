@@ -1,4 +1,3 @@
-
 #include <stdint.h>
 #include <stdio.h>
 #include "driver/i2c_master.h"
@@ -22,7 +21,7 @@
 
 #define OLED_TAG "OLED"
 #define MAIN_TAG "MAIN"
-#define KYEPAD_TAG "KEYPAD"
+#define KEYPAD_TAG "KEYPAD"
 
 QueueHandle_t keypad_queue;
 QueueHandle_t oled_queue;
@@ -32,20 +31,22 @@ QueueHandle_t main_queue;
 typedef enum{
     STATE_PAGE1,
     STATE_PAGE2,
-
+    
 }SystemState;
 
 SystemState app_state = STATE_PAGE1;
+const gpio_num_t ROW_PINS[] = {GPIO_NUM_9, GPIO_NUM_10};
+const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 
-
+const int NUM_ROWS = 2;
+const int NUM_COLS = 3;
 
 
 const char* stateToString(int state);
 
 
 
-const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
-const int NUM_COLS = 3;
+
 void init_Cols(){
     uint64_t col_pins = 0;
     for(int i = 0; i < NUM_COLS; i++){
@@ -60,8 +61,6 @@ void init_Cols(){
     };
     gpio_config(&col_conf);
 }
-const gpio_num_t ROW_PINS[] = {GPIO_NUM_9, GPIO_NUM_10};
-const int NUM_ROWS = 2;
 void init_Rows(){
     uint64_t row_pins_map = 0;
     for(int i = 0; i<NUM_ROWS; i++){
@@ -87,7 +86,13 @@ void scan_matrix(){
         esp_rom_delay_us(2);
         for(int col = 0; col<NUM_COLS; col++){
             if(gpio_get_level(COL_PINS[col]) == 0){
-                buttonstatus[row][col] = true;
+                if(buttonstatus[row][col] == false){
+                    buttonstatus[row][col] = true;
+                    int id_button = (row*NUM_COLS) +col +1;
+                    if(xQueueSend(keypad_queue,&id_button,pdMS_TO_TICKS(10)) != pdPASS){
+                        ESP_LOGW(KEYPAD_TAG, "queue is full");
+                    }
+                }
             }
             else{
                 buttonstatus[row][col] = false;
@@ -96,26 +101,26 @@ void scan_matrix(){
         gpio_set_level(ROW_PINS[row], 1);      
     }
 }
-void keybordScan(){
+void keybord_init(){
     init_Rows();
     init_Cols();
 }
 
 void task_keypad(void *pvParameters){
+    keybord_init();
     while(1){
+        vTaskDelay(pdMS_TO_TICKS(20));
+        scan_matrix();
         //ESP_LOGI(KYEPAD_TAG, "its working");
-        uint8_t dummy_key;
-        for(int i = 0; i < 6; i++){
-            dummy_key = i;
-        
-        if(xQueueSend(keypad_queue,&dummy_key,pdMS_TO_TICKS(100)) != pdPASS){
-            ESP_LOGW(KYEPAD_TAG, "queue is full");
-        }
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        //uint8_t dummy_key;
+        //for(int i = 0; i < 6; i++){
+            //dummy_key = i;
+            
+        //vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    //vTaskDelay(pdMS_TO_TICKS(100));
 }
-}
+
 void task_oled(void *pvParameters){
     while(1){
         //ESP_LOGI(OLED_TAG, "its working");
@@ -123,16 +128,17 @@ void task_oled(void *pvParameters){
         int received_status;
         if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
             ESP_LOGI(OLED_TAG,"received state %d", received_status);
-        }
-        switch (received_status) {
-            case 1:
-            ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
-            break;
-
-            case 2:
-            ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
-            break;
         
+            switch (received_status) {
+                case STATE_PAGE1:
+                ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                break;
+
+                case STATE_PAGE2:
+                ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                break;
+            
+            }
         }
     }
 }
@@ -150,9 +156,9 @@ void task_main(void *pvParameters){
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE2;
-                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE1 to %s", stateToString(received_key));
+                    ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE1 to %s", stateToString(app_state));
                     if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
-                        ESP_LOGW(MAIN_TAG, "qeue if full");
+                        ESP_LOGW(MAIN_TAG, "queue is full");
                     }
                     break;
                     
@@ -166,9 +172,9 @@ void task_main(void *pvParameters){
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE1;
-                    ESP_LOGI(MAIN_TAG, "you moov from STATE_PAGE2 to %s", stateToString(received_key));
+                    ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
                     if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
-                        ESP_LOGW(MAIN_TAG, "qeue if full");
+                        ESP_LOGW(MAIN_TAG, "queue is full");
                     }
                     break;
                 
@@ -300,12 +306,12 @@ void app_main(void) {
     }*/
     keypad_queue = xQueueCreate(10, sizeof(uint8_t));
     if(keypad_queue == NULL){
-        ESP_LOGE(KYEPAD_TAG,"failed to create queue, out of cheap memory");
+        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
         return;
     }
     oled_queue = xQueueCreate(5, sizeof(int));
     if(oled_queue == NULL){
-        ESP_LOGE(KYEPAD_TAG,"failed to create queue, out of cheap memory");
+        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
         return;
     }
     /*
@@ -319,7 +325,7 @@ void app_main(void) {
 
    BaseType_t keypad_task_cr = xTaskCreate(task_keypad, "keypad_task_name", 2048, NULL, 5, NULL);
    if(keypad_task_cr != pdPASS){
-        ESP_LOGE(KYEPAD_TAG,"task wasn't created, memory overflow");
+        ESP_LOGE(KEYPAD_TAG,"task wasn't created, memory overflow");
    }
     BaseType_t main_task_cr = xTaskCreate(task_main, "main_task_name)", 2048, NULL, 5, NULL);
     if(main_task_cr != pdPASS){
@@ -329,8 +335,4 @@ void app_main(void) {
     if(oled_task_cr != pdPASS){
          ESP_LOGE(OLED_TAG, "task wasn't created, memory overflow");
    }
-
- 
-
-
 }
