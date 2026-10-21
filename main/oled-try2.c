@@ -204,8 +204,14 @@ void task_keypad(void *pvParameters){
                 case STATE_PAGE1:
                 switch (received_button.id_button) {
                     case 1:
-                    app_state = STATE_PAGE2;
+                    //app_state = STATE_PAGE2;
                     ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE1 to %s", stateToString(app_state));
+                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
+                        ESP_LOGW(MAIN_TAG, "queue is full");
+                    }
+                    break;
+                    case 2:
+                    //ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
                     if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
                         ESP_LOGW(MAIN_TAG, "queue is full");
                     }
