@@ -22,6 +22,8 @@
 #define OLED_TAG "OLED"
 #define MAIN_TAG "MAIN"
 #define KEYPAD_TAG "KEYPAD"
+#define NUM_ROWS 2
+#define NUM_COLS 3
 
 QueueHandle_t keypad_queue;
 QueueHandle_t oled_queue;
@@ -38,8 +40,6 @@ SystemState app_state = STATE_PAGE1;
 const gpio_num_t ROW_PINS[] = {GPIO_NUM_9, GPIO_NUM_10};
 const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 
-#define NUM_ROWS = 2;
-#define NUM_COLS = 3;
 
 
 const char* stateToString(int state);
@@ -78,26 +78,40 @@ void init_Rows(){
         gpio_set_level(ROW_PINS[i],1);
     }
 }
+typedef struct{
+    int id_button;
+    bool buttom_state;
 
+}buttons;
 void scan_matrix(){
-    static bool buttonstatus[NUM_ROWS][NUM_COLS] = {false};
+    static bool buttonstatus[NUM_ROWS][NUM_COLS];
     for (int row = 0; row< NUM_ROWS; row++){
         gpio_set_level(ROW_PINS[row], 0);
         esp_rom_delay_us(2);
         for(int col = 0; col<NUM_COLS; col++){
+            buttons button = {
+                .id_button = (row*NUM_COLS) + col + 1,
+            };
+            //button = (row*NUM_COLS) +col +1;
             if(gpio_get_level(COL_PINS[col]) == 0){
                 if(buttonstatus[row][col] == false){
                     buttonstatus[row][col] = true;
-                    int id_button = (row*NUM_COLS) +col +1;
-                    if(xQueueSend(keypad_queue,&id_button,pdMS_TO_TICKS(10)) != pdPASS){
+                    button.buttom_state = true;
+                    if(xQueueSend(keypad_queue,&button,pdMS_TO_TICKS(10)) != pdPASS){
                         ESP_LOGW(KEYPAD_TAG, "queue is full");
                     }
                 }
             }
             else{
+                if(buttonstatus[row][col] == true){
+                    button.buttom_state = false;
+                    if(xQueueSend(keypad_queue,&button, pdMS_TO_TICKS(10)) != pdPASS){
+                        ESP_LOGW(KEYPAD_TAG, "queue is full");
+                    }
+                }
                 buttonstatus[row][col] = false;
             }
-        }  
+        } 
         gpio_set_level(ROW_PINS[row], 1);      
     }
 }
