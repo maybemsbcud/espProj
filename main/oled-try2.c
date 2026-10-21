@@ -38,8 +38,8 @@ SystemState app_state = STATE_PAGE1;
 const gpio_num_t ROW_PINS[] = {GPIO_NUM_9, GPIO_NUM_10};
 const gpio_num_t COL_PINS[] = {GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_8};
 
-const int NUM_ROWS = 2;
-const int NUM_COLS = 3;
+#define NUM_ROWS = 2;
+#define NUM_COLS = 3;
 
 
 const char* stateToString(int state);
@@ -78,9 +78,9 @@ void init_Rows(){
         gpio_set_level(ROW_PINS[i],1);
     }
 }
-bool buttonstatus[2][3];
 
 void scan_matrix(){
+    static bool buttonstatus[NUM_ROWS][NUM_COLS] = {false};
     for (int row = 0; row< NUM_ROWS; row++){
         gpio_set_level(ROW_PINS[row], 0);
         esp_rom_delay_us(2);
@@ -107,7 +107,6 @@ void keybord_init(){
 }
 
 void task_keypad(void *pvParameters){
-    keybord_init();
     while(1){
         vTaskDelay(pdMS_TO_TICKS(20));
         scan_matrix();
@@ -116,43 +115,43 @@ void task_keypad(void *pvParameters){
         //for(int i = 0; i < 6; i++){
             //dummy_key = i;
             
-        //vTaskDelay(pdMS_TO_TICKS(1000));
+            //vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        //vTaskDelay(pdMS_TO_TICKS(100));
     }
-    //vTaskDelay(pdMS_TO_TICKS(100));
-}
-
-void task_oled(void *pvParameters){
-    while(1){
-        //ESP_LOGI(OLED_TAG, "its working");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        int received_status;
-        if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
-            ESP_LOGI(OLED_TAG,"received state %d", received_status);
-        
-            switch (received_status) {
-                case STATE_PAGE1:
-                ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
-                break;
-
-                case STATE_PAGE2:
-                ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
-                break;
-            
+    
+    void task_oled(void *pvParameters){
+        while(1){
+            //ESP_LOGI(OLED_TAG, "its working");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            int received_status;
+            if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
+                ESP_LOGI(OLED_TAG,"received state %d", received_status);
+                
+                switch (received_status) {
+                    case STATE_PAGE1:
+                    ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                    break;
+                    
+                    case STATE_PAGE2:
+                    ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                    break;
+                    
+                }
             }
         }
     }
-}
-void task_main(void *pvParameters){
-    while(1){
-        //ESP_LOGI(MAIN_TAG, "it work");
-        //vTaskDelay(pdMS_TO_TICKS(500));
-        uint8_t received_key;
-        if((xQueueReceive(keypad_queue, &received_key, portMAX_DELAY)) == pdTRUE){
-            ESP_LOGI(MAIN_TAG, "received key %d", received_key);
-        }
-        
-        switch (app_state) {
-            case STATE_PAGE1:
+    void task_main(void *pvParameters){
+        while(1){
+            //ESP_LOGI(MAIN_TAG, "it work");
+            //vTaskDelay(pdMS_TO_TICKS(500));
+            uint8_t received_key;
+            if((xQueueReceive(keypad_queue, &received_key, portMAX_DELAY)) == pdTRUE){
+                ESP_LOGI(MAIN_TAG, "received key %d", received_key);
+            }
+            
+            switch (app_state) {
+                case STATE_PAGE1:
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE2;
@@ -164,11 +163,11 @@ void task_main(void *pvParameters){
                     
                     default:
                     break;
-                
+                    
                 }
-            break;
-            
-            case STATE_PAGE2:
+                break;
+                
+                case STATE_PAGE2:
                 switch (received_key) {
                     case 1:
                     app_state = STATE_PAGE1;
@@ -177,85 +176,86 @@ void task_main(void *pvParameters){
                         ESP_LOGW(MAIN_TAG, "queue is full");
                     }
                     break;
-                
+                    
                 }
-            default:
-            break;
+                default:
+                break;
+            }
         }
     }
-}
-
-const char* stateToString(int state){
-    switch (state) {
-        case 0: return "STATE_PAGE1";
-        case 1: return "STATE_PAGE2";
-        default: return "UNKNOWN";
+    
+    const char* stateToString(int state){
+        switch (state) {
+            case 0: return "STATE_PAGE1";
+            case 1: return "STATE_PAGE2";
+            default: return "UNKNOWN";
+        }
     }
-}
-
-// 1. Глобальний хендл для екрана, щоб callback міг його бачити
-i2c_master_dev_handle_t oled_dev_handle;
-
-// 2. Callback для роботи з часом та затримками
-uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
-    switch(msg) {
-        case U8X8_MSG_DELAY_MILLI:
+    
+    // 1. Глобальний хендл для екрана, щоб callback міг його бачити
+    i2c_master_dev_handle_t oled_dev_handle;
+    
+    // 2. Callback для роботи з часом та затримками
+    uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
+        switch(msg) {
+            case U8X8_MSG_DELAY_MILLI:
             vTaskDelay(pdMS_TO_TICKS(arg_int));
             break;
-        case U8X8_MSG_DELAY_10MICRO:
+            case U8X8_MSG_DELAY_10MICRO:
             esp_rom_delay_us(10);
             break;
-        case U8X8_MSG_DELAY_100NANO:
+            case U8X8_MSG_DELAY_100NANO:
             esp_rom_delay_us(1);
             break;
+        }
+        return 1; // 1 означає успіх
     }
-    return 1; // 1 означає успіх
-}
-
-// 3. Callback для передачі байтів через твій новий I2C драйвер
-uint8_t u8g2_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
-    static uint8_t buffer[128]; // Тимчасовий буфер для пакету даних
-    static uint8_t buf_idx = 0;
-
-    switch(msg) {
-        case U8X8_MSG_BYTE_SEND: {
-            // Бібліотека дає шматок даних, ми складаємо його в буфер
-            uint8_t *data = (uint8_t *)arg_ptr;
-            for (int i = 0; i < arg_int; i++) {
-                buffer[buf_idx++] = data[i];
+    
+    // 3. Callback для передачі байтів через твій новий I2C драйвер
+    uint8_t u8g2_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
+        static uint8_t buffer[128]; // Тимчасовий буфер для пакету даних
+        static uint8_t buf_idx = 0;
+        
+        switch(msg) {
+            case U8X8_MSG_BYTE_SEND: {
+                // Бібліотека дає шматок даних, ми складаємо його в буфер
+                uint8_t *data = (uint8_t *)arg_ptr;
+                for (int i = 0; i < arg_int; i++) {
+                    buffer[buf_idx++] = data[i];
+                }
+                break;
             }
-            break;
+            case U8X8_MSG_BYTE_START_TRANSFER: {
+                // Початок транзакції - скидаємо індекс буфера
+                buf_idx = 0;
+                break;
+            }
+            case U8X8_MSG_BYTE_END_TRANSFER: {
+                // Бібліотека каже "відправляй". Використовуємо твій драйвер.
+                // oled_dev_handle вже знає адресу 0x3C, тому передаємо тільки дані.
+                i2c_master_transmit(oled_dev_handle, buffer, buf_idx, -1);
+                break;
+            }
         }
-        case U8X8_MSG_BYTE_START_TRANSFER: {
-            // Початок транзакції - скидаємо індекс буфера
-            buf_idx = 0;
-            break;
-        }
-        case U8X8_MSG_BYTE_END_TRANSFER: {
-            // Бібліотека каже "відправляй". Використовуємо твій драйвер.
-            // oled_dev_handle вже знає адресу 0x3C, тому передаємо тільки дані.
-            i2c_master_transmit(oled_dev_handle, buffer, buf_idx, -1);
-            break;
-        }
+        return 1;
     }
-    return 1;
-}
-void app_main(void) {
-    /*
-    // === ТВОЯ ІНІЦІАЛІЗАЦІЯ I2C ===
-    i2c_master_bus_config_t bus_config = {
-        .i2c_port = -1,
-        .sda_io_num = 16,
-        .scl_io_num = 15,
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = true,
-    };
-    i2c_master_bus_handle_t bus_handle;
-    i2c_new_master_bus(&bus_config, &bus_handle);
-
-    i2c_device_config_t dev_conf = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+    void app_main(void) {
+        keybord_init();
+        /*
+        // === ТВОЯ ІНІЦІАЛІЗАЦІЯ I2C ===
+        i2c_master_bus_config_t bus_config = {
+            .i2c_port = -1,
+            .sda_io_num = 16,
+            .scl_io_num = 15,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+            .glitch_ignore_cnt = 7,
+            .flags.enable_internal_pullup = true,
+            };
+            i2c_master_bus_handle_t bus_handle;
+            i2c_new_master_bus(&bus_config, &bus_handle);
+            
+            i2c_device_config_t dev_conf = {
+                .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = 0x3C,
         .scl_speed_hz = 400000,
     };
