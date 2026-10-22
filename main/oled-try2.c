@@ -31,6 +31,7 @@ QueueHandle_t main_queue;
 
 
 typedef enum{
+    STATE_BLACK,
     STATE_PAGE1,
     STATE_PAGE2,
     STATE_PAGE3,
@@ -51,6 +52,11 @@ uint8_t u8g2_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
 
 
 
+typedef struct{
+    int id_button;
+    bool button_state;
+
+}buttons;
 
 void init_Cols(){
     uint64_t col_pins = 0;
@@ -83,11 +89,6 @@ void init_Rows(){
         gpio_set_level(ROW_PINS[i],1);
     }
 }
-typedef struct{
-    int id_button;
-    bool buttom_state;
-
-}buttons;
 void scan_matrix(){
     static bool buttonstatus[NUM_ROWS][NUM_COLS];
     for (int row = 0; row< NUM_ROWS; row++){
@@ -101,7 +102,7 @@ void scan_matrix(){
             if(gpio_get_level(COL_PINS[col]) == 0){
                 if(buttonstatus[row][col] == false){
                     buttonstatus[row][col] = true;
-                    button.buttom_state = true;
+                    button.button_state = true;
                     if(xQueueSend(keypad_queue,&button,pdMS_TO_TICKS(10)) != pdPASS){
                         ESP_LOGW(KEYPAD_TAG, "queue is full");
                     }
@@ -109,7 +110,7 @@ void scan_matrix(){
             }
             else{
                 if(buttonstatus[row][col] == true){
-                    button.buttom_state = false;
+                    button.button_state = false;
                     if(xQueueSend(keypad_queue,&button, pdMS_TO_TICKS(10)) != pdPASS){
                         ESP_LOGW(KEYPAD_TAG, "queue is full");
                     }
@@ -129,14 +130,7 @@ void task_keypad(void *pvParameters){
     while(1){
         vTaskDelay(pdMS_TO_TICKS(20));
         scan_matrix();
-        //ESP_LOGI(KYEPAD_TAG, "its working");
-        //uint8_t dummy_key;
-        //for(int i = 0; i < 6; i++){
-            //dummy_key = i;
-            
-            //vTaskDelay(pdMS_TO_TICKS(1000));
         }
-        //vTaskDelay(pdMS_TO_TICKS(100));
     }
     
     void task_oled(void *pvParameters){
@@ -149,105 +143,107 @@ void task_keypad(void *pvParameters){
         u8g2_SendBuffer(&u8g2);
         while(1){
             //ESP_LOGI(OLED_TAG, "its working");
-            //vTaskDelay(pdMS_TO_TICKS(1000));
-            buttons received_status;
+            uint8_t received_status;
             if((xQueueReceive(oled_queue, &received_status, portMAX_DELAY)) == pdTRUE){
-                ESP_LOGI(OLED_TAG,"received state %d", received_status.id_button);
+                ESP_LOGI(OLED_TAG,"received state %d", received_status);
                 
-                switch (received_status.id_button) {
-                    case 1:
-                        if(received_status.buttom_state){
+                switch (received_status) {
+                    case 0:
+                        u8g2_ClearBuffer(&u8g2);
+                        u8g2_SendBuffer(&u8g2);
+                    break;
 
-                        
+                    case 1:
                         u8g2_ClearBuffer(&u8g2);
                         
                         u8g2_DrawUTF8(&u8g2, 0, 35, "шлюха");
                         u8g2_SendBuffer(&u8g2);
 
-                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
-                        }
-                        else{
-                            u8g2_ClearBuffer(&u8g2);
-                            u8g2_SendBuffer(&u8g2);
-                        }
-                        break;
+                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
+                    break;
                     
                     case 2:
-                        if(received_status.buttom_state){
-
-                        
                         u8g2_ClearBuffer(&u8g2);
                         
                         u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
                         u8g2_SendBuffer(&u8g2);
-                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status.id_button));
-                        }
-                        else{
-                            u8g2_ClearBuffer(&u8g2);
-                            u8g2_SendBuffer(&u8g2);
-                        }
+                        ESP_LOGI(OLED_TAG, "showing status %s", stateToString(received_status));
                     break;
                     
                 }
             }
         }
     }
-    void task_main(void *pvParameters){
+void task_main(void *pvParameters){
         while(1){
             //ESP_LOGI(MAIN_TAG, "it work");
-            //vTaskDelay(pdMS_TO_TICKS(500));
             buttons received_button;
             if((xQueueReceive(keypad_queue, &received_button, portMAX_DELAY)) == pdTRUE){
                 ESP_LOGI(MAIN_TAG, "received key %d", received_button.id_button);
             
-            switch (app_state) {
-                case STATE_PAGE1:
-                switch (received_button.id_button) {
-                    case 1:
+            if(received_button.button_state){
+                switch (app_state) {
+                
+                    case STATE_PAGE1:
+                        switch (received_button.id_button) {
+                        case 1:
                     //app_state = STATE_PAGE2;
-                    ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE1 to %s", stateToString(app_state));
-                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
-                        ESP_LOGW(MAIN_TAG, "queue is full");
-                    }
-                    break;
-                    case 2:
+                        ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE1 to %s", stateToString(app_state));
+                        if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                            ESP_LOGW(MAIN_TAG, "queue is full");
+                        }
+                        break;
+                        case 2:
                     //ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
-                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
-                        ESP_LOGW(MAIN_TAG, "queue is full");
-                    }
+                        if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                            ESP_LOGW(MAIN_TAG, "queue is full");
+                        }
+                        break;
+                    
+                        default:
+                        break;
+                    
+                        }
                     break;
+                
+                    case STATE_PAGE2:
+                        switch (received_button.id_button) {
+                        case 2:
+                            //app_state = STATE_PAGE1;
+                            ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
+                            if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                            ESP_LOGW(MAIN_TAG, "queue is full");
+                            }
+                        break;
+                    
+                        }
+                    break;
+                        
+                    case STATE_BLACK:
+                        if(xQueueSend(oled_queue, &app_state, pdMS_TO_TICKS(100)) != pdPASS){
+                            ESP_LOGW(MAIN_TAG, "queue is full");
+                        }
+                        app_state = STATE_PAGE1;
+                        break;
                     
                     default:
                     break;
-                    
-                }
-                break;
-                
-                case STATE_PAGE2:
-                switch (received_button.id_button) {
-                    case 2:
-                    app_state = STATE_PAGE1;
-                    ESP_LOGI(MAIN_TAG, "you move from STATE_PAGE2 to %s", stateToString(app_state));
-                    if(xQueueSend(oled_queue, &received_button, pdMS_TO_TICKS(100)) != pdPASS){
-                        ESP_LOGW(MAIN_TAG, "queue is full");
                     }
-                    break;
-                    
                 }
-                default:
-                break;
+            else{
+                app_state = STATE_BLACK;
             }
         }
-        }
     }
+}
     
-    const char* stateToString(int state){
-        switch (state) {
-            case 0: return "STATE_PAGE1";
-            case 1: return "STATE_PAGE2";
-            default: return "UNKNOWN";
-        }
+const char* stateToString(int state){
+    switch (state) {
+        case 0: return "STATE_BlACK";
+        case 1: return "STATE_PAGE1";
+        default: return "STATE_PAGE2";
     }
+}
     
     void init_i2c(){
         // === ТВОЯ ІНІЦІАЛІЗАЦІЯ I2C ===
@@ -268,9 +264,7 @@ void task_keypad(void *pvParameters){
         i2c_new_master_bus(&bus_config, &bus_handle);
         i2c_master_bus_add_device(bus_handle, &dev_conf, &oled_dev_handle);
     }
-    
     // 1. Глобальний хендл для екрана, щоб callback міг його бачити
-    
     // 2. Callback для роботи з часом та затримками
     uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
         switch(msg) {
@@ -315,60 +309,18 @@ void task_keypad(void *pvParameters){
         }
         return 1;
     }
-    void app_main(void) {
+void app_main(void) {
         keybord_init();
         init_i2c();
-        
-        
-        /*
-        // Записуємо хендл у глобальну змінну, яку бачить HAL
-        
-        // === ІНІЦІАЛІЗАЦІЯ U8G2 ===
-        
-        // Кажемо u8g2: "У тебе екран SSD1306 по I2C, і ось функції, якими ти маєш користуватися"
     
-
-    // === МАЛЮВАННЯ ===
-    //u8g2_ClearBuffer(&u8g2); // Очищаємо відеобуфер у пам'яті ESP32
-    
-    // Вибираємо шрифт (їх там тисячі, це стандартний середній)
-    
-    // Пишемо текст. (Координати: X=15 від лівого краю, Y=35 від верху до базової лінії тексту)
-    //u8g2_DrawUTF8(&u8g2, 0, 35, "твоя мать");
-    //u8g2_DrawUTF8(&u8g2,20,45, "шлюха");
-
-    // Виштовхуємо намальований кадр на фізичний екран
-u8g2_ClearBuffer(&u8g2);
-    //u8g2_SendBuffer(&u8g2);
-    bool screen = false;
-    keybordScan();
-    while(1) {
-        scan_matrix();
-        if(buttonstatus[0][0]){
-            printf("hui");
-            if(!screen){
-            u8g2_ClearBuffer(&u8g2);
-            u8g2_DrawUTF8(&u8g2,0,35,"сосі");
-            u8g2_SendBuffer(&u8g2);
-            screen = true;
-            }
-        }
-        else{
-            u8g2_ClearBuffer(&u8g2);
-            u8g2_SendBuffer(&u8g2);
-            screen = false;
-        }
-             
-        vTaskDelay(pdMS_TO_TICKS(20));
-    }*/
     keypad_queue = xQueueCreate(10, sizeof(buttons));
     if(keypad_queue == NULL){
-        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
+        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of heap memory");
         return;
     }
-    oled_queue = xQueueCreate(5, sizeof(buttons));
+    oled_queue = xQueueCreate(5, sizeof(uint8_t));
     if(oled_queue == NULL){
-        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of chep memory");
+        ESP_LOGE(KEYPAD_TAG,"failed to create queue, out of heap memory");
         return;
     }
     /*
