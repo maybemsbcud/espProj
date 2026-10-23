@@ -18,12 +18,12 @@
 #include "esp_log.h"
 #include <stddef.h>
 #include "freertos/queue.h"
-
+#include "keypad.c"
 #define OLED_TAG "OLED"
 #define MAIN_TAG "MAIN"
 #define KEYPAD_TAG "KEYPAD"
-#define NUM_ROWS 2
-#define NUM_COLS 3
+//#define NUM_ROWS 2
+//#define NUM_COLS 3
 
 QueueHandle_t keypad_queue;
 QueueHandle_t oled_queue;
@@ -52,13 +52,13 @@ uint8_t u8g2_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_p
 
 
 
-typedef struct{
+/*typedef struct{
     int id_button;
     bool button_state;
 
 }buttons;
-
-void init_Cols(){
+*/
+/*void init_Cols(){
     uint64_t col_pins = 0;
     for(int i = 0; i < NUM_COLS; i++){
         col_pins |= (1ULL << COL_PINS[i]);
@@ -124,15 +124,15 @@ void scan_matrix(){
 void keybord_init(){
     init_Rows();
     init_Cols();
-}
+}*/
 
-void task_keypad(void *pvParameters){
+/*void task_keypad(void *pvParameters){
     while(1){
         vTaskDelay(pdMS_TO_TICKS(20));
         scan_matrix();
         }
     }
-    
+   */ /*
     void task_oled(void *pvParameters){
         u8g2_t u8g2; // Головна структура стану екрана
         u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8g2_i2c_byte_cb, u8g2_gpio_and_delay_cb);
@@ -173,7 +173,7 @@ void task_keypad(void *pvParameters){
                 }
             }
         }
-    }
+    }*/
 void task_main(void *pvParameters){
         while(1){
             //ESP_LOGI(MAIN_TAG, "it work");
@@ -263,7 +263,7 @@ const char* stateToString(int state){
         };
         i2c_new_master_bus(&bus_config, &bus_handle);
         i2c_master_bus_add_device(bus_handle, &dev_conf, &oled_dev_handle);
-    }
+    }/*
     // 1. Глобальний хендл для екрана, щоб callback міг його бачити
     // 2. Callback для роботи з часом та затримками
     uint8_t u8g2_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
@@ -308,7 +308,7 @@ const char* stateToString(int state){
             }
         }
         return 1;
-    }
+    }*/
 void app_main(void) {
         keybord_init();
         init_i2c();
